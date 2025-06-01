@@ -1,6 +1,7 @@
 # Skills package
 from .echo_skill import EchoSkill
 from .math_skill import MathSkill
+from .log_skill import LogSkill
 from .llm_skill import LLMCompletionSkill
 from .web_search_skill import WebSearchSkill
 from .web_scrape_skill import WebScrapeSkill
@@ -13,6 +14,7 @@ from .translation_skill import TranslationSkill
 __all__ = [
     "EchoSkill",
     "MathSkill",
+    "LogSkill",
     "LLMCompletionSkill",
     "WebSearchSkill",
     "WebScrapeSkill",
