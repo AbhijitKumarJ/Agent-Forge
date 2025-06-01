@@ -81,6 +81,15 @@ The following skills (and tools/agents) are priorities for future testing effort
         - Error handling for `IOError` (e.g., permission issues) on write.
         - Reading from an empty file.
     - **Mocking:** Utilized `unittest.mock` to simulate `builtins.open` and `builtins.print` for isolated and deterministic tests.
+- **`PrintTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/print_tool.py`
+    - **Tests Added:** `AgentWorkbench/tests/test_print_tool.py`
+    - **Coverage:**
+        - Printing single string arguments.
+        - Behavior with multiple arguments (only the first is printed).
+        - Behavior with no arguments.
+        - Printing empty strings and strings with special characters.
+    - **Mocking/Capture:** Utilized `unittest.mock.patch` with `io.StringIO` to capture and verify output sent to `sys.stdout`.
 - **`DBTool`** (and other data-related tools):
     - Use in-memory databases (e.g., SQLite in-memory) for fast and isolated tests.
     - Test connection, table creation, CRUD operations.
