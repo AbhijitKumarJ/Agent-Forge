@@ -69,9 +69,18 @@ The following skills (and tools/agents) are priorities for future testing effort
 - **Consider parameterization for skills like `MathSkill`** to easily test many input-output pairs without writing a new method for each.
 
 ### Tools:
-- **`FileTool`**:
-    - Mock `open`, `os.path`, etc. if not using a temporary file system for tests.
-    - Test reading, writing, appending, file existence checks.
+- **`FileTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/file_tool.py`
+    - **Tests Added:** `AgentWorkbench/tests/test_file_tool.py`
+    - **Coverage:**
+        - Successful file reading (`mode='r'`).
+        - Successful file writing (`mode='w'`).
+        - Handling of missing content when `mode='w'`.
+        - Handling of invalid mode argument.
+        - Error handling for `FileNotFoundError` on read.
+        - Error handling for `IOError` (e.g., permission issues) on write.
+        - Reading from an empty file.
+    - **Mocking:** Utilized `unittest.mock` to simulate `builtins.open` and `builtins.print` for isolated and deterministic tests.
 - **`DBTool`** (and other data-related tools):
     - Use in-memory databases (e.g., SQLite in-memory) for fast and isolated tests.
     - Test connection, table creation, CRUD operations.
