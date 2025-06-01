@@ -110,7 +110,16 @@ The following skills (and tools/agents) are priorities for future testing effort
         - Error handling for `sqlite3.connect` failures.
         - Error handling for `conn.execute` failures.
     - **Mocking:** Utilized `unittest.mock.patch` to simulate `sqlite3.connect` (and its context manager behavior), `sqlite3.Connection`, `sqlite3.Cursor` objects, and `os.path.exists`. Also captured `builtins.print`.
-- **`KnowledgeBaseTool`**: Similar to `SQLiteTool` (previously `DBTool`), depends on its underlying storage. (Further testing needed for `KnowledgeBaseTool` itself)
+- **`KnowledgeBaseTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/knowledge_base_tool.py`
+    - **Tests Added:** `AgentWorkbench/tests/test_knowledge_base_tool.py`
+    - **Coverage:**
+        - Storing new question-answer pairs in the in-memory dictionary.
+        - Retrieving answers for existing questions.
+        - Attempting to retrieve answers for non-existent questions (returns `None`).
+        - Updating answers for existing questions.
+        - Verifying case sensitivity of questions (keys).
+    - **Mocking/Capture:** Utilized `unittest.mock.patch` with `io.StringIO` to capture and verify output sent to `sys.stdout`. (No complex mocking needed due to in-memory nature).
 
 ### Agents:
 - Expand tests for `SimpleAgent` and `CollaborativeAgent` to cover more complex interactions, different skill combinations, and error states.
