@@ -39,13 +39,30 @@ The `NewsSkill` was initially a placeholder without actual data fetching capabil
 The following skills and tools are key candidates for future enhancement efforts:
 
 ### Skills:
-- **`FinanceSkill`:**
-    - **Current State:** Placeholder.
-    - **Potential Enhancements:**
-        - Integrate with a free financial data API (e.g., Alpha Vantage, Yahoo Finance unofficial API) to fetch stock prices, market news, or cryptocurrency data.
-        - Implement methods for specific queries (e.g., `get_stock_price(symbol)`, `get_market_summary()`).
-        - Add error handling for API rate limits, invalid symbols, etc.
-        - Make API keys configurable.
+- **`FinanceSkill` (Phase 2 - Initial Implementation Completed):**
+    - **Current State:** Basic stock price fetching functionality implemented.
+    - **Functionality Added:**
+        - Integrates with the Alpha Vantage API (specifically the `GLOBAL_QUOTE` function) to fetch the latest stock price for a given symbol.
+        - The `execute` method takes a `symbol` (string) and an `action` (string, defaults to "get_price"). Currently, only "get_price" is implemented.
+        - Returns a dictionary `{"symbol": "ACTUAL_SYMBOL", "price": "PRICE_AS_STRING"}` on success, or `None` on failure.
+    - **API Key Management:**
+        - Expects the Alpha Vantage API key to be set as an environment variable `ALPHA_VANTAGE_API_KEY`.
+        - The skill checks for this variable and provides a warning if not set; API calls will fail without it.
+        - `config/settings.py` has been updated with comments guiding users on setting this environment variable.
+    - **Error Handling:**
+        - Catches and handles `requests` library exceptions (e.g., `Timeout`, `HTTPError`, general `RequestException`).
+        - Parses and handles error messages or notes provided by the Alpha Vantage API in its JSON response (e.g., for invalid symbols, rate limits).
+        - Handles unexpected or incomplete JSON response structures.
+        - Prints informative error messages to the console.
+    - **Unit Tests:**
+        - Added to `AgentWorkbench/tests/test_finance_skill.py`.
+        - Tests mock the `requests.get` calls to the Alpha Vantage API.
+        - Coverage includes successful price retrieval, behavior with missing API key, handling of various simulated API error messages (e.g., "Error Message", "Note"), network errors, and malformed/incomplete API responses.
+    - **Potential Future Enhancements:**
+        - Implement other actions like fetching historical data, company overview, or market news.
+        - Support for other financial instruments (e.g., ETFs, cryptocurrencies if covered by the API).
+        - More sophisticated parsing of financial data (e.g., converting price to float, handling different currencies if API provides that info).
+        - Configuration of the API endpoint or specific API parameters via `config/settings.py`.
 - **`LLMSkill` (Phase 2 - Initial Implementation Completed):**
     - **Current State:** Basic text generation functionality implemented.
     - **Functionality Added:**
