@@ -106,12 +106,30 @@ The following skills and tools are key candidates for future enhancement efforts
         - Allow selection of a specific translation provider (e.g., 'google', 'bing') if the `translators` library supports it and it's beneficial for reliability or quality.
         - More granular error reporting or ability to get supported language codes.
         - Option to configure a specific API key if a premium service via the `translators` library (or a direct API integration) is desired.
-- **`WeatherSkill`:**
-    - **Current State:** Placeholder.
-    - **Potential Enhancements:**
-        - Integrate with a weather API (e.g., OpenWeatherMap, WeatherAPI.com) to fetch current weather or forecasts.
-        - Methods like `get_current_weather(location)`, `get_forecast(location, days=1)`.
-        - Handle location ambiguity and API errors.
+- **`WeatherSkill` (Phase 2 - Initial Implementation Completed):**
+    - **Current State:** Basic current weather fetching functionality implemented.
+    - **Functionality Added:**
+        - Integrates with the OpenWeatherMap "Current Weather Data" API to fetch current weather conditions for a specified location.
+        - The `execute` method takes `location` (string, e.g., "London,UK"), an `action` (string, defaults to "get_current_weather"), and `units` (string, defaults to "metric" for Celsius, can be "imperial" for Fahrenheit).
+        - Returns a dictionary containing key weather details: location name, temperature, feels_like, condition, description, humidity, pressure, wind speed, cloudiness, visibility, and sunrise/sunset times, or `None` on failure.
+    - **API Key Management:**
+        - Expects the OpenWeatherMap API key to be set as an environment variable `OPENWEATHERMAP_API_KEY`.
+        - The skill checks for this variable and provides a warning if not set; API calls will fail without it.
+        - `config/settings.py` has been updated with comments guiding users on setting this environment variable.
+    - **Error Handling:**
+        - Catches and handles `requests` library exceptions (e.g., `Timeout`, `HTTPError`, general `RequestException`).
+        - Parses and handles error messages provided by the OpenWeatherMap API in its JSON response (e.g., for "city not found" or invalid API key).
+        - Handles unexpected or incomplete JSON response structures.
+        - Prints informative error messages to the console.
+    - **Unit Tests:**
+        - Added to `AgentWorkbench/tests/test_weather_skill.py`.
+        - Tests mock the `requests.get` calls to the OpenWeatherMap API using sample JSON responses.
+        - Coverage includes successful weather data retrieval (metric and imperial units), behavior with missing API key, handling of various simulated API error messages, network errors, and malformed/incomplete API responses.
+    - **Potential Future Enhancements:**
+        - Implement a "get_forecast" action to fetch multi-day or hourly forecasts (OpenWeatherMap provides these in free/paid tiers).
+        - Support for more location query types (e.g., latitude/longitude, city ID).
+        - More user-friendly formatting of output data (e.g., converting timestamps to human-readable dates).
+        - Allow configuration of the API endpoint or specific default parameters via `config/settings.py`.
 
 ### Tools:
 - **`DBTool` (`SQLiteTool`):**

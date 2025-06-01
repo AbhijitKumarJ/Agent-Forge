@@ -24,5 +24,10 @@ DEFAULT_LOG_FILE = "AgentWorkbench/data/activity.log"
 # export ALPHA_VANTAGE_API_KEY='your_actual_alphavantage_api_key'
 # The skill will pick this up automatically.
 
+# Example for WeatherSkill (OpenWeatherMap):
+# To use WeatherSkill, set the OPENWEATHERMAP_API_KEY environment variable:
+# export OPENWEATHERMAP_API_KEY='your_actual_openweathermap_api_key'
+# The skill will pick this up automatically.
+
 # Example for NewsSkill (if it were to use NewsAPI.org):
 # NEWS_API_KEY = "your_newsapi_key_here" # Or set as ENV variable NEWS_API_KEY
