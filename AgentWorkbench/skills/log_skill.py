@@ -1,13 +1,17 @@
 import os
 import datetime
 from core import BaseSkill
+from config import settings
 
 class LogSkill(BaseSkill):
     """A skill to log messages to a file."""
 
-    def __init__(self, name="LogSkill", description="Logs messages to a file.", log_file="AgentWorkbench/data/activity.log"):
+    def __init__(self, name="LogSkill", description="Logs messages to a file.", log_file=None):
         super().__init__(name, description)
-        self.log_file_path = log_file
+        if log_file is None:
+            self.log_file_path = settings.DEFAULT_LOG_FILE
+        else:
+            self.log_file_path = log_file
         self._ensure_data_directory()
 
     def _ensure_data_directory(self):

@@ -25,6 +25,45 @@ class TestLogSkill(unittest.TestCase):
         # It's generally better to avoid creating self.default_log_file in tests
         # and rely entirely on mocks for it.
 
+    @patch('skills.log_skill.settings') # Mocks 'settings' as imported in log_skill.py
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('os.path.exists')
+    @patch('os.makedirs')
+    def test_uses_default_path_from_settings(self, mock_makedirs, mock_exists, mock_file, mock_settings, mock_dt):
+        mock_exists.return_value = True
+        MOCKED_DEFAULT_PATH = "AgentWorkbench/data/settings_default.log"
+        mock_settings.DEFAULT_LOG_FILE = MOCKED_DEFAULT_PATH # Configure the mock
+
+        skill = LogSkill() # Initialize without log_file argument
+        self.assertEqual(skill.log_file_path, MOCKED_DEFAULT_PATH) # Check if path was set from mock_settings
+
+        result = skill.execute("Test message to settings default")
+        self.assertTrue(result)
+
+        expected_log_entry = f"[{FIXED_DATETIME.strftime('%Y-%m-%d %H:%M:%S')}] [INFO] - Test message to settings default\n"
+        mock_file.assert_called_with(MOCKED_DEFAULT_PATH, "a") # Check open was called with this path
+        mock_file().write.assert_called_with(expected_log_entry)
+
+    @patch('skills.log_skill.settings') # Mock settings to ensure it's not used if path is provided
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('os.path.exists')
+    @patch('os.makedirs')
+    def test_uses_constructor_path_over_settings(self, mock_makedirs, mock_exists, mock_file, mock_settings, mock_dt):
+        mock_exists.return_value = True
+        CONSTRUCTOR_PATH = "AgentWorkbench/data/constructor_provided.log"
+        # Set a different path in settings to ensure it's overridden
+        mock_settings.DEFAULT_LOG_FILE = "AgentWorkbench/data/should_be_overridden.log"
+
+        skill = LogSkill(log_file=CONSTRUCTOR_PATH) # Initialize with explicit log_file
+        self.assertEqual(skill.log_file_path, CONSTRUCTOR_PATH)
+
+        result = skill.execute("Test message to constructor path")
+        self.assertTrue(result)
+
+        expected_log_entry = f"[{FIXED_DATETIME.strftime('%Y-%m-%d %H:%M:%S')}] [INFO] - Test message to constructor path\n"
+        mock_file.assert_called_with(CONSTRUCTOR_PATH, "a")
+        mock_file().write.assert_called_with(expected_log_entry)
+
     @patch('builtins.open', new_callable=mock_open)
     @patch('os.path.exists')
     @patch('os.makedirs')

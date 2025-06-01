@@ -69,13 +69,57 @@ The following skills (and tools/agents) are priorities for future testing effort
 - **Consider parameterization for skills like `MathSkill`** to easily test many input-output pairs without writing a new method for each.
 
 ### Tools:
-- **`FileTool`**:
-    - Mock `open`, `os.path`, etc. if not using a temporary file system for tests.
-    - Test reading, writing, appending, file existence checks.
-- **`DBTool`** (and other data-related tools):
-    - Use in-memory databases (e.g., SQLite in-memory) for fast and isolated tests.
-    - Test connection, table creation, CRUD operations.
-- **`KnowledgeBaseTool`**: Similar to `DBTool`, depends on its underlying storage.
+- **`FileTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/file_tool.py`
+    - **Tests Added:** `AgentWorkbench/tests/test_file_tool.py`
+    - **Coverage:**
+        - Successful file reading (`mode='r'`).
+        - Successful file writing (`mode='w'`).
+        - Handling of missing content when `mode='w'`.
+        - Handling of invalid mode argument.
+        - Error handling for `FileNotFoundError` on read.
+        - Error handling for `IOError` (e.g., permission issues) on write.
+        - Reading from an empty file.
+    - **Mocking:** Utilized `unittest.mock` to simulate `builtins.open` and `builtins.print` for isolated and deterministic tests.
+- **`PrintTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/print_tool.py`
+    - **Tests Added:** `AgentWorkbench/tests/test_print_tool.py`
+    - **Coverage:**
+        - Printing single string arguments.
+        - Behavior with multiple arguments (only the first is printed).
+        - Behavior with no arguments.
+        - Printing empty strings and strings with special characters.
+    - **Mocking/Capture:** Utilized `unittest.mock.patch` with `io.StringIO` to capture and verify output sent to `sys.stdout`.
+- **`ReverseTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/reverse_tool.py`
+    - **Tests Added:** `AgentWorkbench/tests/test_reverse_tool.py`
+    - **Coverage:**
+        - Reversing various string types (simple, spaces, numbers/specials, empty, palindrome).
+        - Handling of no arguments (defaults to empty string).
+        - Behavior with multiple arguments (only first is used).
+        - Behavior with non-string inputs (e.g., integers causing `TypeError`, lists being reversed).
+    - **Mocking/Capture:** Utilized `unittest.mock.patch` with `io.StringIO` to capture and verify output sent to `sys.stdout`.
+- **`SQLiteTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/db_tool.py` (defines `SQLiteTool`)
+    - **Tests Added:** `AgentWorkbench/tests/test_sqlite_tool.py`
+    - **Coverage:**
+        - Database initialization (`_ensure_db`): table creation if DB file doesn't exist, no action if DB file exists.
+        - Storing key-value pairs using `REPLACE INTO`.
+        - Retrieving existing values.
+        - Attempting to retrieve non-existent keys (returns `None`).
+        - Error handling for `sqlite3.connect` failures.
+        - Error handling for `conn.execute` failures.
+    - **Mocking:** Utilized `unittest.mock.patch` to simulate `sqlite3.connect` (and its context manager behavior), `sqlite3.Connection`, `sqlite3.Cursor` objects, and `os.path.exists`. Also captured `builtins.print`.
+- **`KnowledgeBaseTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/knowledge_base_tool.py`
+    - **Tests Added:** `AgentWorkbench/tests/test_knowledge_base_tool.py`
+    - **Coverage:**
+        - Storing new question-answer pairs in the in-memory dictionary.
+        - Retrieving answers for existing questions.
+        - Attempting to retrieve answers for non-existent questions (returns `None`).
+        - Updating answers for existing questions.
+        - Verifying case sensitivity of questions (keys).
+    - **Mocking/Capture:** Utilized `unittest.mock.patch` with `io.StringIO` to capture and verify output sent to `sys.stdout`. (No complex mocking needed due to in-memory nature).
 
 ### Agents:
 - Expand tests for `SimpleAgent` and `CollaborativeAgent` to cover more complex interactions, different skill combinations, and error states.
