@@ -69,11 +69,26 @@ The following skills and tools are key candidates for future enhancement efforts
         - More sophisticated prompt templating or management.
         - Streaming responses.
         - Conversation history management for chat-based interactions.
-- **`TranslationSkill`:**
-    - **Current State:** Placeholder.
-    - **Potential Enhancements:**
-        - Integrate with a translation API (e.g., Google Translate API (paid), or a free alternative if available and suitable).
-        - Methods for `translate(text, target_language, source_language=None)`.
+- **`TranslationSkill` (Phase 2 - Initial Implementation Completed):**
+    - **Current State:** Basic translation functionality implemented.
+    - **Functionality Added:**
+        - Integrates with the `translators` Python library to perform translations. This library attempts to use free tiers of various online translation services (e.g., Google, Bing, Deepl).
+        - The `execute` method takes `text_to_translate` (string), `target_language` (string, e.g., "fr", "es"), and an optional `source_language` (string, defaults to "auto" for auto-detection by the library).
+        - Returns the translated string or `None` on failure.
+    - **API Key Management:**
+        - No direct API key management is implemented in this skill, as the `translators` library handles access to services, often via unofficial API usage or free tiers that don't require explicit user-provided keys for basic operation.
+    - **Error Handling:**
+        - Catches `translators.TranslatorError` for library-specific issues.
+        - Catches general exceptions that might occur during the translation process.
+        - Prints informative error messages to the console.
+    - **Unit Tests:**
+        - Added to `AgentWorkbench/tests/test_translation_skill.py`.
+        - Tests mock the `translators.translate_text` function.
+        - Coverage includes successful translations (with and without specified source language), input validation (empty text/target language), and simulated errors from the translation library.
+    - **Potential Future Enhancements:**
+        - Allow selection of a specific translation provider (e.g., 'google', 'bing') if the `translators` library supports it and it's beneficial for reliability or quality.
+        - More granular error reporting or ability to get supported language codes.
+        - Option to configure a specific API key if a premium service via the `translators` library (or a direct API integration) is desired.
 - **`WeatherSkill`:**
     - **Current State:** Placeholder.
     - **Potential Enhancements:**
