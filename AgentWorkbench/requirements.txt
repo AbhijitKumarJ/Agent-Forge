@@ -1,0 +1,15 @@
+# Agent Workbench Dependencies
+# You can add/remove packages as you extend the workbench.
+
+# Core requirements
+argparse
+
+# For future LLM, API, or skill/tool integration
+# requests
+# langchain
+# openai
+# numpy
+# pandas
+
+# For testing
+# pytest
