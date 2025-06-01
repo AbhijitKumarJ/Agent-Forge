@@ -90,6 +90,15 @@ The following skills (and tools/agents) are priorities for future testing effort
         - Behavior with no arguments.
         - Printing empty strings and strings with special characters.
     - **Mocking/Capture:** Utilized `unittest.mock.patch` with `io.StringIO` to capture and verify output sent to `sys.stdout`.
+- **`ReverseTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/reverse_tool.py`
+    - **Tests Added:** `AgentWorkbench/tests/test_reverse_tool.py`
+    - **Coverage:**
+        - Reversing various string types (simple, spaces, numbers/specials, empty, palindrome).
+        - Handling of no arguments (defaults to empty string).
+        - Behavior with multiple arguments (only first is used).
+        - Behavior with non-string inputs (e.g., integers causing `TypeError`, lists being reversed).
+    - **Mocking/Capture:** Utilized `unittest.mock.patch` with `io.StringIO` to capture and verify output sent to `sys.stdout`.
 - **`DBTool`** (and other data-related tools):
     - Use in-memory databases (e.g., SQLite in-memory) for fast and isolated tests.
     - Test connection, table creation, CRUD operations.
