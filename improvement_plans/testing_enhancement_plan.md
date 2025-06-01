@@ -99,10 +99,18 @@ The following skills (and tools/agents) are priorities for future testing effort
         - Behavior with multiple arguments (only first is used).
         - Behavior with non-string inputs (e.g., integers causing `TypeError`, lists being reversed).
     - **Mocking/Capture:** Utilized `unittest.mock.patch` with `io.StringIO` to capture and verify output sent to `sys.stdout`.
-- **`DBTool`** (and other data-related tools):
-    - Use in-memory databases (e.g., SQLite in-memory) for fast and isolated tests.
-    - Test connection, table creation, CRUD operations.
-- **`KnowledgeBaseTool`**: Similar to `DBTool`, depends on its underlying storage.
+- **`SQLiteTool` (Completed):**
+    - **Location:** `AgentWorkbench/tools/db_tool.py` (defines `SQLiteTool`)
+    - **Tests Added:** `AgentWorkbench/tests/test_sqlite_tool.py`
+    - **Coverage:**
+        - Database initialization (`_ensure_db`): table creation if DB file doesn't exist, no action if DB file exists.
+        - Storing key-value pairs using `REPLACE INTO`.
+        - Retrieving existing values.
+        - Attempting to retrieve non-existent keys (returns `None`).
+        - Error handling for `sqlite3.connect` failures.
+        - Error handling for `conn.execute` failures.
+    - **Mocking:** Utilized `unittest.mock.patch` to simulate `sqlite3.connect` (and its context manager behavior), `sqlite3.Connection`, `sqlite3.Cursor` objects, and `os.path.exists`. Also captured `builtins.print`.
+- **`KnowledgeBaseTool`**: Similar to `SQLiteTool` (previously `DBTool`), depends on its underlying storage. (Further testing needed for `KnowledgeBaseTool` itself)
 
 ### Agents:
 - Expand tests for `SimpleAgent` and `CollaborativeAgent` to cover more complex interactions, different skill combinations, and error states.
