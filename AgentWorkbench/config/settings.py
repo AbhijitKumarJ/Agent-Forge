@@ -4,3 +4,6 @@
 LOG_LEVEL = "INFO"
 AGENT_MEMORY_TYPE = "local_file" # or "database", "cloud_storage"
 DATA_PATH = "../data/" # Relative path to the data directory
+
+# Default path for the LogSkill's output file
+DEFAULT_LOG_FILE = "AgentWorkbench/data/activity.log"
