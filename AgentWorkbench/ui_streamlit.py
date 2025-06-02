@@ -1,6 +1,6 @@
 import streamlit as st
 from agents import SimpleAgent, CollaborativeAgent
-from skills import EchoSkill, MathSkill, LLMCompletionSkill, WebSearchSkill, WebScrapeSkill
+from skills import EchoSkill, MathSkill, LLMSkill, WebSearchSkill, WebScrapeSkill
 from tools import PrintTool, ReverseTool, FileTool, KnowledgeBaseTool, SQLiteTool
 
 st.title("Agent Workbench UI (Advanced)")
@@ -9,7 +9,7 @@ agent_types = ["SimpleAgent", "CollaborativeAgent"]
 agent_type = st.selectbox("Choose agent type", agent_types)
 task = st.text_input("Enter a task or query", "2+2")
 
-skill_options = ["EchoSkill", "MathSkill", "LLMCompletionSkill", "WebSearchSkill", "WebScrapeSkill", "WeatherSkill", "FinanceSkill", "NewsSkill", "WikipediaSkill", "TranslationSkill"]
+skill_options = ["EchoSkill", "MathSkill", "LLMSkill", "WebSearchSkill", "WebScrapeSkill", "WeatherSkill", "FinanceSkill", "NewsSkill", "WikipediaSkill", "TranslationSkill"]
 tool_options = ["PrintTool", "ReverseTool", "FileTool", "KnowledgeBaseTool", "SQLiteTool"]
 
 if agent_type == "SimpleAgent":
@@ -21,8 +21,8 @@ if agent_type == "SimpleAgent":
         agent.add_skill(EchoSkill(name="EchoSkill", description="Echoes input."))
     elif skill == "MathSkill":
         agent.add_skill(MathSkill(name="MathSkill", description="Evaluates math."))
-    elif skill == "LLMCompletionSkill":
-        agent.add_skill(LLMCompletionSkill(name="LLMCompletionSkill", description="LLM API call."))
+    elif skill == "LLMSkill":
+        agent.add_skill(LLMSkill(name="LLMSkill", description="LLM API call."))
     elif skill == "WebSearchSkill":
         agent.add_skill(WebSearchSkill(name="WebSearchSkill", description="Web search."))
     elif skill == "WebScrapeSkill":
@@ -55,8 +55,8 @@ elif agent_type == "CollaborativeAgent":
             agent.add_skill(EchoSkill(name="EchoSkill", description="Echoes input."))
         elif skill == "MathSkill":
             agent.add_skill(MathSkill(name="MathSkill", description="Evaluates math."))
-        elif skill == "LLMCompletionSkill":
-            agent.add_skill(LLMCompletionSkill(name="LLMCompletionSkill", description="LLM API call."))
+        elif skill == "LLMSkill":
+            agent.add_skill(LLMSkill(name="LLMSkill", description="LLM API call."))
         elif skill == "WebSearchSkill":
             agent.add_skill(WebSearchSkill(name="WebSearchSkill", description="Web search."))
         elif skill == "WebScrapeSkill":

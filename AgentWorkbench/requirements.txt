@@ -3,13 +3,14 @@
 
 # Core requirements
 argparse
+openai
+streamlit
 
 # For future LLM, API, or skill/tool integration
 # requests
 # langchain
-# openai
 # numpy
 # pandas
 
 # For testing
-# pytest
+pytest
