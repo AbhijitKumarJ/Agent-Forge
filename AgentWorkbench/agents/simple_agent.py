@@ -3,6 +3,9 @@ from core import BaseAgent
 class SimpleAgent(BaseAgent):
     """A simple agent that echoes the task and demonstrates skill/tool usage."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def run(self, task: str):
         print(f"[SimpleAgent] Task received: {task}")
         # Demonstrate using all skills
