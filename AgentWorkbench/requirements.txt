@@ -5,9 +5,11 @@
 argparse
 openai
 streamlit
+requests
+translators
+beautifulsoup4
 
 # For future LLM, API, or skill/tool integration
-# requests
 # langchain
 # numpy
 # pandas
