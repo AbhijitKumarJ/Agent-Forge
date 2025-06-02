@@ -138,5 +138,159 @@ class TestCapabilityRouting(unittest.TestCase):
         self.assertEqual(result, "search_run_broadcast")
 
 
+class TestTaskDecomposition(unittest.TestCase):
+    def setUp(self):
+        self.agent_a = SimpleAgent(name="AgentA", description="Handles 'part A'")
+        self.agent_a.run = MagicMock(return_value="Result from A")
+
+        self.agent_b = SimpleAgent(name="AgentB", description="Handles 'part B'")
+        self.agent_b.run = MagicMock(return_value="Result from B")
+
+        self.agent_c = SimpleAgent(name="AgentC", description="Generic Echo Agent")
+        # self.agent_c.add_skill(EchoSkill(name="EchoSkill")) # Not strictly needed if run is mocked
+        self.agent_c.run = MagicMock(side_effect=lambda task_string: f"Echo: {task_string}")
+
+        self.collab_agent = CollaborativeAgent(
+            name="DecomposerAgent",
+            description="Tests task decomposition",
+            teammates=[self.agent_a, self.agent_b, self.agent_c]
+        )
+        # Default route_task mock - can be overridden in specific tests
+        self.collab_agent.route_task = MagicMock(return_value=None)
+
+    def test_no_decomposition_fallback_routing(self):
+        """Test that a simple task is routed if a route exists (no decomposition)."""
+        task = "simple task no keywords"
+        self.collab_agent.route_task = MagicMock(side_effect=lambda t: self.agent_c if t == task else None)
+
+        result = self.collab_agent.run(task)
+
+        self.collab_agent.route_task.assert_called_once_with(task)
+        self.agent_c.run.assert_called_once_with(task)
+        self.assertEqual(result, f"Echo: {task}")
+
+    def test_no_decomposition_fallback_broadcast(self):
+        """Test broadcast for a simple task if no specific route is found."""
+        task = "another simple task"
+        self.collab_agent.route_task = MagicMock(return_value=None) # No specific route
+
+        # Mock run methods for broadcast assertion
+        self.agent_a.run = MagicMock(return_value="A_broadcast")
+        self.agent_b.run = MagicMock(return_value="B_broadcast")
+        self.agent_c.run = MagicMock(return_value="C_broadcast")
+
+        # Mock aggregate_results (the main one, not _aggregate_sub_task_results)
+        self.collab_agent.aggregate_results = MagicMock(return_value="Broadcasted and aggregated")
+
+        result = self.collab_agent.run(task)
+
+        self.collab_agent.route_task.assert_called_once_with(task)
+        self.agent_a.run.assert_called_once_with(task)
+        self.agent_b.run.assert_called_once_with(task)
+        self.agent_c.run.assert_called_once_with(task)
+        self.collab_agent.aggregate_results.assert_called_once()
+        self.assertEqual(result, "Broadcasted and aggregated")
+
+    def test_decomposition_with_and_keyword(self):
+        """Test task decomposition with ' and ' keyword."""
+        task = "do part A and do part B"
+        sub_task_a = "do part A"
+        sub_task_b = "do part B"
+
+        def route_task_side_effect(t_task):
+            if t_task == sub_task_a: return self.agent_a
+            if t_task == sub_task_b: return self.agent_b
+            return None
+        self.collab_agent.route_task = MagicMock(side_effect=route_task_side_effect)
+
+        result = self.collab_agent.run(task)
+
+        self.agent_a.run.assert_called_once_with(sub_task_a)
+        self.agent_b.run.assert_called_once_with(sub_task_b)
+        self.assertEqual(result, "Result from A\nResult from B")
+
+    def test_decomposition_case_insensitive_and(self):
+        """Test task decomposition with case-insensitive ' AND ' keyword."""
+        task = "do part A AND do part B"
+        sub_task_a = "do part A" # _try_decompose_task preserves casing of subtasks
+        sub_task_b = "do part B"
+
+        def route_task_side_effect(t_task):
+            if t_task == sub_task_a: return self.agent_a
+            if t_task == sub_task_b: return self.agent_b
+            return None
+        self.collab_agent.route_task = MagicMock(side_effect=route_task_side_effect)
+
+        result = self.collab_agent.run(task)
+
+        self.agent_a.run.assert_called_once_with(sub_task_a)
+        self.agent_b.run.assert_called_once_with(sub_task_b)
+        self.assertEqual(result, "Result from A\nResult from B")
+
+    def test_decomposition_first_and_only(self):
+        """Test decomposition splits only on the first ' and '."""
+        task = "part A and part B and part C"
+        sub_task_1 = "part A"
+        sub_task_2 = "part B and part C" # Second "and" is part of the sub-task
+
+        self.agent_a.run = MagicMock(return_value="Result from A for sub1")
+        self.agent_b.run = MagicMock(return_value="Result from B for sub2")
+
+        def route_task_side_effect(t_task):
+            if t_task == sub_task_1: return self.agent_a
+            if t_task == sub_task_2: return self.agent_b
+            return None
+        self.collab_agent.route_task = MagicMock(side_effect=route_task_side_effect)
+
+        result = self.collab_agent.run(task)
+
+        self.agent_a.run.assert_called_once_with(sub_task_1)
+        self.agent_b.run.assert_called_once_with(sub_task_2)
+        self.assertEqual(result, "Result from A for sub1\nResult from B for sub2")
+
+    def test_decomposition_sub_task_cannot_be_routed(self):
+        """Test decomposition where one sub-task cannot be routed."""
+        task = "do known part A and do unknown part X"
+        sub_task_known = "do known part A"
+        sub_task_unknown = "do unknown part X"
+
+        def route_task_side_effect(t_task):
+            if t_task == sub_task_known: return self.agent_a
+            if t_task == sub_task_unknown: return None # Cannot route unknown part
+            return None
+        self.collab_agent.route_task = MagicMock(side_effect=route_task_side_effect)
+
+        result = self.collab_agent.run(task)
+
+        self.agent_a.run.assert_called_once_with(sub_task_known)
+        expected_result = f"Result from A\n[Sub-task '{sub_task_unknown}' could not be routed]"
+        self.assertEqual(result, expected_result)
+
+    def test_decomposition_sub_task_agent_fails(self):
+        """Test decomposition where one sub-task's assigned agent fails."""
+        task = "part A good and part B bad"
+        sub_task_good = "part A good"
+        sub_task_bad = "part B bad"
+
+        self.agent_a.run = MagicMock(return_value="Result from A good")
+        self.agent_b.run = MagicMock(side_effect=Exception("Agent B internal error"))
+
+        def route_task_side_effect(t_task):
+            if t_task == sub_task_good: return self.agent_a
+            if t_task == sub_task_bad: return self.agent_b
+            return None
+        self.collab_agent.route_task = MagicMock(side_effect=route_task_side_effect)
+
+        result = self.collab_agent.run(task)
+
+        self.agent_a.run.assert_called_once_with(sub_task_good)
+        self.agent_b.run.assert_called_once_with(sub_task_bad)
+
+        # The error message format is: f"[{error_msg}]" where error_msg is f"Error executing sub-task '{sub_task_string}' by {routed_agent.name}: {e}"
+        expected_error_part = f"[Error executing sub-task '{sub_task_bad}' by AgentB: Agent B internal error]"
+        expected_result = f"Result from A good\n{expected_error_part}"
+        self.assertEqual(result, expected_result)
+
+
 if __name__ == "__main__":
     unittest.main()

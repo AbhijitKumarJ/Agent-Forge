@@ -115,6 +115,45 @@ When a task is broadcast to multiple teammates, or when results from different r
 # Result: "Proceed"
 ```
 
+## Task Decomposition in CollaborativeAgent
+
+### Overview
+The `CollaborativeAgent` has a capability to attempt a basic form of task decomposition. This allows it to break down a single, potentially complex task string into multiple simpler sub-tasks. This is an initial step towards more sophisticated task planning and delegation.
+
+### Keyword-Based Decomposition
+-   **Mechanism:** The primary method for decomposition is keyword-based. The agent specifically looks for the keyword " and " (with spaces on either side to avoid splitting words like "android").
+-   **Behavior:**
+    -   The matching is case-insensitive.
+    -   Currently, the agent splits the task on the *first detected occurrence* of the keyword " and ". If a task contains multiple " and " keywords, only the first one will be used for splitting, resulting in exactly two sub-tasks. For instance, "task A and task B and task C" becomes `Sub-task 1: "task A"` and `Sub-task 2: "task B and task C"`.
+-   **Example:**
+    A task like: `"search for latest AI news and summarize key findings"`
+    Might be decomposed into:
+    *   `Sub-task 1: "search for latest AI news"`
+    *   `Sub-task 2: "summarize key findings"`
+
+### Sub-Task Execution
+-   **Routing:** Once decomposed, each sub-task is treated as an independent task for the purpose of routing. The `CollaborativeAgent` uses its standard routing logic (checking `capabilities` first, then skill/tool names) to find the most appropriate teammate for each sub-task.
+-   **Sequential Execution:** Sub-tasks are currently processed sequentially. The first sub-task is routed and executed, then its result is collected, followed by the second sub-task, and so on.
+
+### Result Aggregation for Sub-Tasks
+-   **Method:** After all sub-tasks have been executed (or attempted), their individual results are combined into a single string.
+-   **Current Implementation:** The results from each sub-task (including any error messages or placeholders for unroutable sub-tasks) are converted to strings and then joined together, with each sub-task's result appearing on a new line.
+-   **Example:**
+    If Sub-task 1 (e.g., "search for latest AI news") yields:
+    `"AI News Report: AI models are showing unprecedented capabilities..."`
+    And Sub-task 2 (e.g., "summarize key findings") yields:
+    `"Summary: Key findings indicate AI is advancing rapidly in language understanding and generation."`
+    The final combined result returned by the `CollaborativeAgent` would be:
+    ```
+    AI News Report: AI models are showing unprecedented capabilities...
+    Summary: Key findings indicate AI is advancing rapidly in language understanding and generation.
+    ```
+
+### Future Enhancements for Decomposition/Aggregation (Conceptual)
+While the current keyword-based decomposition is a foundational step, future improvements could involve:
+-   **LLM-based Task Decomposition:** Utilizing a Large Language Model to parse and understand more complex task structures, allowing for more nuanced and multi-step decomposition beyond simple keywords.
+-   **LLM-based Result Aggregation:** Employing an LLM to synthesize the results from multiple sub-tasks into a more coherent and contextually relevant single response, rather than simple concatenation.
+
 ## Extending and Customizing
 
 Developers can leverage these multi-agent features by:
