@@ -115,44 +115,58 @@ When a task is broadcast to multiple teammates, or when results from different r
 # Result: "Proceed"
 ```
 
-## Task Decomposition in CollaborativeAgent
+## LLM-Based Task Decomposition in `CollaborativeAgent`
 
 ### Overview
-The `CollaborativeAgent` has a capability to attempt a basic form of task decomposition. This allows it to break down a single, potentially complex task string into multiple simpler sub-tasks. This is an initial step towards more sophisticated task planning and delegation.
+The `CollaborativeAgent` now leverages Large Language Models (LLMs) for more sophisticated task decomposition. Instead of relying on simple keyword splitting, it can analyze complex tasks and break them down into a series of more granular, actionable sub-tasks. This enhances the agent's ability to plan and delegate work effectively within its team.
 
-### Keyword-Based Decomposition
--   **Mechanism:** The primary method for decomposition is keyword-based. The agent specifically looks for the keyword " and " (with spaces on either side to avoid splitting words like "android").
--   **Behavior:**
-    -   The matching is case-insensitive.
-    -   Currently, the agent splits the task on the *first detected occurrence* of the keyword " and ". If a task contains multiple " and " keywords, only the first one will be used for splitting, resulting in exactly two sub-tasks. For instance, "task A and task B and task C" becomes `Sub-task 1: "task A"` and `Sub-task 2: "task B and task C"`.
--   **Example:**
-    A task like: `"search for latest AI news and summarize key findings"`
-    Might be decomposed into:
-    *   `Sub-task 1: "search for latest AI news"`
-    *   `Sub-task 2: "summarize key findings"`
+### Mechanism
+1.  **Locating LLMSkill:** When a task is received, the `CollaborativeAgent` first searches among its teammates for an agent that possesses an `LLMSkill`.
+2.  **Prompting the LLM:** If an `LLMSkill`-equipped teammate is found, a specialized prompt is constructed. This prompt instructs the LLM to act as a task decomposition assistant, analyze the user's task, and return a list of sub-tasks in JSON format.
+3.  **Processing LLM Response:** The `CollaborativeAgent` expects the LLM to output a JSON array of strings, where each string is a distinct sub-task.
+4.  **Fallback:** If no teammate has an `LLMSkill`, or if the LLM call fails (e.g., API error, network issue), or if the LLM's response cannot be successfully parsed as a JSON list of strings, the `CollaborativeAgent` will fall back to treating the original task as a single, non-decomposed unit. It will then attempt to route this original task using its standard routing logic.
+
+### LLM Output and Atomic Tasks
+-   **Expected Format:** The system strictly expects a JSON-formatted list of strings from the LLM (e.g., `["sub-task one", "sub-task two"]`).
+-   **Atomic Tasks:** If the LLM determines that a given task is already simple enough and does not require decomposition, it is instructed to return an empty JSON list (`[]`). When the `CollaborativeAgent` receives an empty list, it understands that the original task should be treated as atomic and proceeds to route or broadcast it as a whole. Similarly, if the LLM returns a list containing only empty or whitespace strings, this is also treated as an indication that no actionable sub-tasks were generated, and the original task is processed.
+
+### Example of LLM-Driven Decomposition
+Consider the following complex task:
+`Task: "Plan a weekend trip to San Francisco for next month, including finding flights, booking a pet-friendly hotel, and listing three activities."`
+
+A capable LLM, when prompted correctly, might decompose this into:
+```json
+[
+    "Find flight options to San Francisco for next month",
+    "Research and identify pet-friendly hotel options in San Francisco for the chosen dates",
+    "List three potential activities or points of interest in San Francisco suitable for a weekend trip"
+]
+```
 
 ### Sub-Task Execution
--   **Routing:** Once decomposed, each sub-task is treated as an independent task for the purpose of routing. The `CollaborativeAgent` uses its standard routing logic (checking `capabilities` first, then skill/tool names) to find the most appropriate teammate for each sub-task.
--   **Sequential Execution:** Sub-tasks are currently processed sequentially. The first sub-task is routed and executed, then its result is collected, followed by the second sub-task, and so on.
+-   **Routing:** Once successfully decomposed by the LLM, each sub-task string is treated as an independent task. The `CollaborativeAgent` uses its standard routing logic (checking `capabilities` first, then skill/tool names) to find the most appropriate teammate for *each individual sub-task*.
+-   **Sequential Execution:** Sub-tasks are currently processed sequentially. The first sub-task from the LLM's list is routed and executed, its result collected, then the second sub-task, and so on.
 
 ### Result Aggregation for Sub-Tasks
--   **Method:** After all sub-tasks have been executed (or attempted), their individual results are combined into a single string.
--   **Current Implementation:** The results from each sub-task (including any error messages or placeholders for unroutable sub-tasks) are converted to strings and then joined together, with each sub-task's result appearing on a new line.
--   **Example:**
-    If Sub-task 1 (e.g., "search for latest AI news") yields:
-    `"AI News Report: AI models are showing unprecedented capabilities..."`
-    And Sub-task 2 (e.g., "summarize key findings") yields:
-    `"Summary: Key findings indicate AI is advancing rapidly in language understanding and generation."`
-    The final combined result returned by the `CollaborativeAgent` would be:
+-   **Method:** After all generated sub-tasks have been executed (or an attempt has been made), their individual results are combined.
+-   **Current Implementation:** The results from each sub-task (which can include actual outcomes, error messages, or placeholders for unroutable sub-tasks) are converted to strings and then joined together, with each sub-task's result appearing on a new line.
+-   **Example (following the trip planning task):**
+    If the sub-tasks yielded:
+    1.  `"Flight options: SFO Air, United..."`
+    2.  `"Pet-friendly hotels: Hotel PAWsome, The Canine Courtyard..."`
+    3.  `"Activities: Golden Gate Bridge, Alcatraz, Fisherman's Wharf."`
+
+    The final combined result would be:
     ```
-    AI News Report: AI models are showing unprecedented capabilities...
-    Summary: Key findings indicate AI is advancing rapidly in language understanding and generation.
+    Flight options: SFO Air, United...
+    Pet-friendly hotels: Hotel PAWsome, The Canine Courtyard...
+    Activities: Golden Gate Bridge, Alcatraz, Fisherman's Wharf.
     ```
 
-### Future Enhancements for Decomposition/Aggregation (Conceptual)
-While the current keyword-based decomposition is a foundational step, future improvements could involve:
--   **LLM-based Task Decomposition:** Utilizing a Large Language Model to parse and understand more complex task structures, allowing for more nuanced and multi-step decomposition beyond simple keywords.
--   **LLM-based Result Aggregation:** Employing an LLM to synthesize the results from multiple sub-tasks into a more coherent and contextually relevant single response, rather than simple concatenation.
+### Future Enhancements for Decomposition/Aggregation
+While the current LLM-based decomposition significantly improves upon keyword methods, further advancements could include:
+-   **More Complex Decomposition Logics:** Utilizing LLMs for more advanced reasoning, such as identifying dependencies between sub-tasks or creating conditional execution paths.
+-   **Sophisticated Result Synthesis:** Employing an LLM to synthesize the results from multiple sub-tasks into a more coherent, contextually integrated, and human-readable final narrative, rather than simple string concatenation.
 
 ## Extending and Customizing
 

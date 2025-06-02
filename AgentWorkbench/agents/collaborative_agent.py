@@ -1,22 +1,30 @@
+import json
 from core import BaseAgent
 from collections import Counter
 from typing import List, Any, Optional, Tuple
+from ..skills import LLMSkill # Adjusted import path assuming skills is a sibling directory to agents
+
 
 class CollaborativeAgent(BaseAgent):
     """
     A specialized agent that coordinates tasks among a team of other agents.
 
-    The CollaborativeAgent acts as a manager or a delegator. It can:
-    1.  Attempt to decompose a complex task into simpler sub-tasks based on
-        keywords (e.g., "and"). Each sub-task is then routed and executed.
-    2.  If task decomposition is not applicable or fails, it routes the entire
-        task to a specific teammate based on their declared `capabilities` or
-        matching skill/tool names.
-    3.  If no specific agent is identified for routing the original task, it
-        broadcasts the task to all teammates.
-    4.  Aggregate results obtained from teammates, using weighted voting if
-        weights are available, or a simple majority vote otherwise. Results from
-        decomposed sub-tasks are currently combined by simple string concatenation.
+    The CollaborativeAgent acts as a manager or a delegator. Its key functionalities include:
+    1.  **LLM-Driven Task Decomposition**: It attempts to decompose complex tasks
+        into simpler, actionable sub-tasks. This process relies on a teammate
+        equipped with an `LLMSkill`. If decomposition is successful, each
+        sub-task is then routed and executed individually.
+    2.  **Capability-Based Routing**: If task decomposition is not performed or
+        is unsuccessful, the agent routes the entire task to a specific teammate.
+        This routing primarily considers the declared `capabilities` of teammates.
+    3.  **Skill/Tool Fallback Routing**: If capability-based routing yields no match,
+        it falls back to matching task keywords against teammates' skill and tool names.
+    4.  **Broadcast**: If no specific agent can be identified for a task, it is
+        broadcast to all teammates.
+    5.  **Result Aggregation**: Results from multiple teammates (from broadcast) are
+        aggregated using weighted voting (if agent `weight` attributes are set)
+        or by a simple majority vote. Results from decomposed sub-tasks are
+        currently combined by simple string concatenation.
 
     Attributes:
         teammates (List[BaseAgent]): A list of agent objects that are part of the team.
@@ -95,33 +103,110 @@ class CollaborativeAgent(BaseAgent):
 
     def _try_decompose_task(self, task: str) -> Optional[List[str]]:
         """
-        Attempts to decompose a task into two sub-tasks based on a keyword.
+        Attempts to decompose a task into sub-tasks using an LLM-equipped teammate.
 
-        Currently, it looks for the keyword " and " (case-insensitive) and
-        splits the task string on the first occurrence of this keyword.
-        For example, "task A and task B and task C" would be split into
-        `["task A", "task B and task C"]`.
+        This method searches for a teammate that possesses an `LLMSkill`. If found,
+        it constructs a detailed prompt asking the LLM to break down the given `task`
+        into a list of simpler, actionable sub-task strings. The LLM is expected
+        to return this list in JSON format (e.g., `["sub_task1", "sub_task2"]`).
+
+        The method handles several potential failure points:
+        -   If no teammate with an `LLMSkill` is found, decomposition is skipped.
+        -   If the LLM call (via the `LLMSkill.execute()` method) fails or returns
+            no response.
+        -   If the LLM's response is not valid JSON or does not conform to the
+            expected format (a list of strings).
+
+        If the LLM considers the task atomic and not decomposable, it's expected
+        to return an empty list (`[]`), which this method will pass on. The `run`
+        method will then handle this by processing the original task.
+
+        The previous keyword-based decomposition logic has been removed.
 
         Args:
-            task (str): The task string to decompose.
+            task (str): The task string to be decomposed.
 
         Returns:
-            Optional[List[str]]: A list of two sub-task strings, or None.
+            Optional[List[str]]: A list of sub-task strings if decomposition is
+                                 successful (this list can be empty if the LLM
+                                 deems the task atomic). Returns `None` if an
+                                 `LLMSkill`-equipped teammate is not found, or if
+                                 any error occurs during the LLM call or response processing.
         """
-        keyword = " and "
-        # Find the keyword case-insensitively
-        lower_task = task.lower()
-        keyword_index = lower_task.find(keyword)
+        llm_skill_agent = None
+        llm_skill_instance = None
 
-        if keyword_index != -1:
-            # Split using the index found, but on the original task string
-            # to preserve casing in sub-tasks.
-            sub_task1 = task[:keyword_index].strip()
-            sub_task2 = task[keyword_index + len(keyword):].strip()
+        for teammate in self.teammates:
+            for skill in getattr(teammate, 'skills', []):
+                if isinstance(skill, LLMSkill):
+                    llm_skill_agent = teammate
+                    llm_skill_instance = skill
+                    break
+            if llm_skill_agent:
+                break
 
-            if sub_task1 and sub_task2: # Ensure neither part is empty
-                return [sub_task1, sub_task2]
-        return None
+        if not llm_skill_agent or not llm_skill_instance:
+            print("[CollaborativeAgent] No teammate with LLMSkill found. Skipping LLM-based decomposition.")
+            return None
+
+        prompt = f"""You are an expert task decomposition assistant. Your goal is to break down a complex user task into a series of simpler, actionable sub-tasks. These sub-tasks should be executable by different specialized agents.
+
+Analyze the following user task and provide a list of sub-tasks in JSON format. The JSON output should be a list of strings, where each string is a sub-task.
+
+User Task: "{task}"
+
+If the task is already simple and cannot or should not be decomposed, return an empty list [].
+If the task implies a clear sequence, maintain that order in the sub-tasks.
+
+Your Output (should be only a valid JSON list of strings):"""
+
+        print(f"[CollaborativeAgent] Attempting LLM-based task decomposition using {llm_skill_agent.name}'s LLMSkill.")
+
+        llm_response = None
+        try:
+            # BaseSkill defines execute, not run.
+            llm_response = llm_skill_instance.execute(prompt)
+        except Exception as e:
+            print(f"[CollaborativeAgent] Error during LLM call for task decomposition: {e}")
+            return None
+
+        if not llm_response:
+            print("[CollaborativeAgent] LLM returned no response for decomposition.")
+            return None
+
+        print(f"[CollaborativeAgent] LLM response for decomposition: {llm_response}")
+
+        try:
+            # Attempt to strip potential markdown code block fences if LLM wraps JSON in them
+            clean_response = llm_response.strip()
+            if clean_response.startswith("```json"):
+                clean_response = clean_response[len("```json"):].strip()
+            if clean_response.endswith("```"):
+                clean_response = clean_response[:-len("```")].strip()
+
+            sub_tasks = json.loads(clean_response)
+        except json.JSONDecodeError as e:
+            print(f"[CollaborativeAgent] Failed to parse LLM response as JSON: {e}. Response: {llm_response}")
+            return None
+
+        if not isinstance(sub_tasks, list):
+            print(f"[CollaborativeAgent] LLM response is not a list. Response: {sub_tasks}")
+            return None
+
+        if not all(isinstance(st, str) for st in sub_tasks):
+            print(f"[CollaborativeAgent] Not all items in LLM response list are strings. Response: {sub_tasks}")
+            return None
+
+        # It's okay to return an empty list if the LLM deems the task non-decomposable.
+        # The run method will handle an empty sub_tasks list (likely by falling back to original task).
+        # Or if it contains only empty strings after stripping (though the prompt asks for non-empty)
+        # valid_sub_tasks = [st.strip() for st in sub_tasks if st.strip()]
+        # if not valid_sub_tasks and sub_tasks: # if sub_tasks was not empty but all items were whitespace
+        #    print(f"[CollaborativeAgent] LLM decomposition resulted in empty or whitespace-only sub-tasks.")
+        #    return [] # Return empty list, let run method handle this.
+
+        print(f"[CollaborativeAgent] Successfully decomposed task into: {sub_tasks}")
+        return sub_tasks
 
     def _aggregate_sub_task_results(self, sub_task_results: list) -> str:
         """
@@ -230,15 +315,22 @@ class CollaborativeAgent(BaseAgent):
 
         The execution logic involves several steps:
         1.  **Attempt Task Decomposition**: Initially, the method calls
-            `_try_decompose_task()` to check if the input `task` can be broken
-            down into sub-tasks (e.g., based on keywords like " and ").
-        2.  **Sub-Task Execution (if decomposed)**: If decomposition is successful,
-            each sub-task is sequentially routed to the most appropriate teammate
-            (using `self.route_task()`). The results from these sub-tasks are
-            collected and then aggregated using `_aggregate_sub_task_results()`.
-        3.  **Standard Execution (if not decomposed)**: If the task is not
-            decomposed, the agent attempts to route the entire task to a single
-            suitable teammate using `self.route_task()`.
+            `_try_decompose_task()`. This method now uses an LLM (via a teammate
+            with `LLMSkill`) to attempt to break down the input `task` into
+            a list of sub-task strings.
+        2.  **Sub-Task Execution (if decomposed)**: If `_try_decompose_task()`
+            returns a valid list of sub-tasks (even an empty one, which is handled
+            by falling through to the 'else' block after a check), and the list is not
+            effectively empty (e.g. not `["", ""]`), each sub-task is sequentially
+            routed to the most appropriate teammate (using `self.route_task()`).
+            The results from these sub-tasks are collected and then aggregated using
+            `_aggregate_sub_task_results()`.
+        3.  **Standard Execution (if not decomposed or decomposition yields no actionable tasks)**:
+            If task decomposition is not attempted (e.g., no LLM skill teammate),
+            fails (e.g., LLM error, invalid JSON), or results in no actionable
+            sub-tasks (empty list or list of blank strings), the agent processes
+            the original task as a single unit. It attempts to route this task to a
+            single suitable teammate using `self.route_task()`.
             a.  If a route is found, that teammate executes the task, and its
                 result is returned.
             b.  If no specific route is found, the task is broadcast to all
@@ -260,8 +352,14 @@ class CollaborativeAgent(BaseAgent):
 
         sub_tasks = self._try_decompose_task(task)
 
-        if sub_tasks:
-            print(f"[CollaborativeAgent] Task decomposed into: {sub_tasks}")
+        # Check if LLM returned a list of sub-tasks, but all are empty or whitespace
+        if sub_tasks and not any(st.strip() for st in sub_tasks):
+            print(f"[CollaborativeAgent] LLM returned empty or effectively empty sub-tasks. Treating original task as atomic: {task}")
+            sub_tasks = None # Force fallback to process original task
+
+        if sub_tasks: # This now correctly handles None from LLM failure, explicit None from above, or a valid list of sub-tasks.
+                     # An empty list [] from LLM (meaning "atomic task") will also go to the 'else' block.
+            print(f"[CollaborativeAgent] Task decomposed by LLM into {len(sub_tasks)} sub-task(s): {sub_tasks}")
             sub_task_results = []
             for sub_task_string in sub_tasks:
                 print(f"[CollaborativeAgent] Processing sub-task: '{sub_task_string}'")
@@ -282,10 +380,17 @@ class CollaborativeAgent(BaseAgent):
                     sub_task_results.append(f"[Sub-task '{sub_task_string}' could not be routed]")
 
             final_combined_result = self._aggregate_sub_task_results(sub_task_results)
-            print(f"[CollaborativeAgent] Combined result for decomposed task: {final_combined_result}")
+            print(f"[CollaborativeAgent] Final combined result for decomposed task '{task}': {final_combined_result}")
             return final_combined_result
         else:
-            print(f"[CollaborativeAgent] Task not decomposed. Proceeding with standard execution for: {task}")
+            # This 'else' block handles:
+            # 1. _try_decompose_task returned None (LLM skill not found, LLM error, JSON parse error, or list of blank strings)
+            # 2. _try_decompose_task returned [] (LLM deemed task atomic)
+            if sub_tasks is None:
+                 print(f"[CollaborativeAgent] Task decomposition failed or resulted in blank sub-tasks. Processing as single task: {task}")
+            else: # sub_tasks is []
+                 print(f"[CollaborativeAgent] LLM deemed task atomic. Processing as single task: {task}")
+
             # Original logic: Try routing the whole task
             routed_agent = self.route_task(task)
             if routed_agent:

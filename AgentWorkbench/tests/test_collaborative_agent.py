@@ -1,7 +1,8 @@
 import unittest
-from unittest.mock import MagicMock
+import json # Added
+from unittest.mock import MagicMock, patch
 from agents import SimpleAgent, CollaborativeAgent
-from skills import EchoSkill, MathSkill, LogSkill # Assuming LogSkill exists for fallback test
+from skills import EchoSkill, MathSkill, LogSkill, LLMSkill # Added LLMSkill
 from tools import PrintTool
 
 class TestCollaborativeAgent(unittest.TestCase):
@@ -140,101 +141,141 @@ class TestCapabilityRouting(unittest.TestCase):
 
 class TestTaskDecomposition(unittest.TestCase):
     def setUp(self):
-        self.agent_a = SimpleAgent(name="AgentA", description="Handles 'part A'")
+        # Worker agents
+        self.agent_a = SimpleAgent(name="AgentA", description="Worker A")
         self.agent_a.run = MagicMock(return_value="Result from A")
-
-        self.agent_b = SimpleAgent(name="AgentB", description="Handles 'part B'")
+        self.agent_b = SimpleAgent(name="AgentB", description="Worker B")
         self.agent_b.run = MagicMock(return_value="Result from B")
 
-        self.agent_c = SimpleAgent(name="AgentC", description="Generic Echo Agent")
-        # self.agent_c.add_skill(EchoSkill(name="EchoSkill")) # Not strictly needed if run is mocked
-        self.agent_c.run = MagicMock(side_effect=lambda task_string: f"Echo: {task_string}")
+        # Agent with LLMSkill
+        self.llm_agent = SimpleAgent(name="LLMAgent", description="Agent with LLM Skill")
+        self.llm_skill_mock = MagicMock(spec=LLMSkill) # Mock the LLMSkill instance
+        self.llm_skill_mock.name = "LLMSkill" # Give the mock a name attribute
+        self.llm_agent.add_skill(self.llm_skill_mock)
+        self.llm_agent.run = MagicMock() # LLMAgent itself doesn't run, its skill is used
 
         self.collab_agent = CollaborativeAgent(
             name="DecomposerAgent",
-            description="Tests task decomposition",
-            teammates=[self.agent_a, self.agent_b, self.agent_c]
+            description="Tests LLM task decomposition",
+            teammates=[self.llm_agent, self.agent_a, self.agent_b] # LLM agent is a teammate
         )
-        # Default route_task mock - can be overridden in specific tests
+        # Mock route_task for sub-tasks by default, can be overridden
         self.collab_agent.route_task = MagicMock(return_value=None)
 
-    def test_no_decomposition_fallback_routing(self):
-        """Test that a simple task is routed if a route exists (no decomposition)."""
-        task = "simple task no keywords"
-        self.collab_agent.route_task = MagicMock(side_effect=lambda t: self.agent_c if t == task else None)
+    def test_no_decomposition_llm_skill_not_found_fallback_routing(self):
+        """Test fallback routing when no LLM agent is available."""
+        task = "simple task, no llm agent involved"
+        # Create a collab agent without the LLM agent
+        collab_no_llm = CollaborativeAgent("NoLLM", "Test", teammates=[self.agent_a, self.agent_b])
+        collab_no_llm.route_task = MagicMock(side_effect=lambda t: self.agent_a if t == task else None)
+        self.agent_a.run = MagicMock(return_value="Fallback for no LLM")
+
+        result = collab_no_llm.run(task)
+
+        self.agent_a.run.assert_called_once_with(task)
+        self.assertEqual(result, "Fallback for no LLM")
+        self.llm_skill_mock.execute.assert_not_called() # Ensure LLM was not called
+
+    def test_no_decomposition_llm_skill_fails_fallback_routing(self):
+        """Test fallback routing when LLM skill execution fails."""
+        task = "task causing llm error"
+        self.llm_skill_mock.execute.side_effect = Exception("LLM API Error")
+
+        # If LLM decomposition fails, it should try to route the original task
+        self.collab_agent.route_task = MagicMock(side_effect=lambda t: self.agent_a if t == task else None)
+        self.agent_a.run = MagicMock(return_value="Fallback due to LLM error")
 
         result = self.collab_agent.run(task)
 
-        self.collab_agent.route_task.assert_called_once_with(task)
-        self.agent_c.run.assert_called_once_with(task)
-        self.assertEqual(result, f"Echo: {task}")
+        self.llm_skill_mock.execute.assert_called_once() # LLM was called
+        self.agent_a.run.assert_called_once_with(task) # Fallback to routing original task
+        self.assertEqual(result, "Fallback due to LLM error")
+
+    def test_no_decomposition_llm_invalid_json_fallback_routing(self):
+        """Test fallback routing when LLM returns invalid JSON."""
+        task = "task causing bad json"
+        self.llm_skill_mock.execute.return_value = "this is not json"
+
+        self.collab_agent.route_task = MagicMock(side_effect=lambda t: self.agent_a if t == task else None)
+        self.agent_a.run = MagicMock(return_value="Fallback due to bad JSON")
+
+        result = self.collab_agent.run(task)
+
+        self.llm_skill_mock.execute.assert_called_once()
+        self.agent_a.run.assert_called_once_with(task)
+        self.assertEqual(result, "Fallback due to bad JSON")
+
+    def test_no_decomposition_llm_returns_atomic_task_empty_list(self):
+        """Test fallback routing when LLM returns an empty list (atomic task)."""
+        task = "simple atomic task"
+        self.llm_skill_mock.execute.return_value = json.dumps([])
+
+        self.collab_agent.route_task = MagicMock(side_effect=lambda t: self.agent_a if t == task else None)
+        self.agent_a.run = MagicMock(return_value="Atomic Result A")
+
+        result = self.collab_agent.run(task)
+
+        self.llm_skill_mock.execute.assert_called_once()
+        self.agent_a.run.assert_called_once_with(task)
+        self.assertEqual(result, "Atomic Result A")
+
+    def test_no_decomposition_llm_returns_list_of_blank_strings(self):
+        """Test fallback routing when LLM returns a list of only blank strings."""
+        task = "task leading to blank subtasks"
+        self.llm_skill_mock.execute.return_value = json.dumps(["", "   "])
+
+        self.collab_agent.route_task = MagicMock(side_effect=lambda t: self.agent_a if t == task else None)
+        self.agent_a.run = MagicMock(return_value="Fallback from blank strings")
+
+        result = self.collab_agent.run(task)
+
+        self.llm_skill_mock.execute.assert_called_once()
+        self.agent_a.run.assert_called_once_with(task)
+        self.assertEqual(result, "Fallback from blank strings")
 
     def test_no_decomposition_fallback_broadcast(self):
-        """Test broadcast for a simple task if no specific route is found."""
-        task = "another simple task"
-        self.collab_agent.route_task = MagicMock(return_value=None) # No specific route
+        """Test broadcast when LLM decomposition fails and no route for original task."""
+        task = "another simple task for broadcast"
+        self.llm_skill_mock.execute.return_value = json.dumps([]) # LLM says atomic
 
-        # Mock run methods for broadcast assertion
-        self.agent_a.run = MagicMock(return_value="A_broadcast")
-        self.agent_b.run = MagicMock(return_value="B_broadcast")
-        self.agent_c.run = MagicMock(return_value="C_broadcast")
+        self.collab_agent.route_task = MagicMock(return_value=None) # No specific route for original task
 
-        # Mock aggregate_results (the main one, not _aggregate_sub_task_results)
-        self.collab_agent.aggregate_results = MagicMock(return_value="Broadcasted and aggregated")
+        self.agent_a.run = MagicMock(return_value="A_broadcast_llm_fallback")
+        self.agent_b.run = MagicMock(return_value="B_broadcast_llm_fallback")
+        # LLMAgent's own run method won't be called if it's just providing the skill
+        # but if it's also a general teammate, it might. Here, it's simpler if it doesn't participate in broadcast.
+        # Let's assume self.llm_agent is not a general worker for this broadcast.
+        # We can re-init collab_agent for this test if needed, or ensure llm_agent.run is not called.
+        # For simplicity, let's assume only agent_a and agent_b are general workers.
+        # We need to ensure llm_agent.run isn't called by broadcast.
+        # The current setup has llm_agent in teammates.
+        # Let's re-mock its run if it's part of broadcast.
+        self.llm_agent.run = MagicMock(return_value="LLM_agent_broadcast_res")
+
+
+        self.collab_agent.aggregate_results = MagicMock(return_value="Broadcasted and aggregated after LLM fallback")
 
         result = self.collab_agent.run(task)
 
-        self.collab_agent.route_task.assert_called_once_with(task)
+        self.llm_skill_mock.execute.assert_called_once()
+        self.collab_agent.route_task.assert_called_once_with(task) # Attempted to route original task
         self.agent_a.run.assert_called_once_with(task)
         self.agent_b.run.assert_called_once_with(task)
-        self.agent_c.run.assert_called_once_with(task)
+        self.llm_agent.run.assert_called_once_with(task) # Since it's in teammates
         self.collab_agent.aggregate_results.assert_called_once()
-        self.assertEqual(result, "Broadcasted and aggregated")
+        self.assertEqual(result, "Broadcasted and aggregated after LLM fallback")
 
-    def test_decomposition_with_and_keyword(self):
-        """Test task decomposition with ' and ' keyword."""
-        task = "do part A and do part B"
-        sub_task_a = "do part A"
-        sub_task_b = "do part B"
+    def test_llm_decomposition_successful(self):
+        """Test successful LLM decomposition and sub-task execution."""
+        task = "complex task for llm"
+        sub_task_1 = "sub-task 1"
+        sub_task_2 = "sub-task 2"
+        expected_sub_tasks = [sub_task_1, sub_task_2]
 
-        def route_task_side_effect(t_task):
-            if t_task == sub_task_a: return self.agent_a
-            if t_task == sub_task_b: return self.agent_b
-            return None
-        self.collab_agent.route_task = MagicMock(side_effect=route_task_side_effect)
+        self.llm_skill_mock.execute.return_value = json.dumps(expected_sub_tasks)
 
-        result = self.collab_agent.run(task)
-
-        self.agent_a.run.assert_called_once_with(sub_task_a)
-        self.agent_b.run.assert_called_once_with(sub_task_b)
-        self.assertEqual(result, "Result from A\nResult from B")
-
-    def test_decomposition_case_insensitive_and(self):
-        """Test task decomposition with case-insensitive ' AND ' keyword."""
-        task = "do part A AND do part B"
-        sub_task_a = "do part A" # _try_decompose_task preserves casing of subtasks
-        sub_task_b = "do part B"
-
-        def route_task_side_effect(t_task):
-            if t_task == sub_task_a: return self.agent_a
-            if t_task == sub_task_b: return self.agent_b
-            return None
-        self.collab_agent.route_task = MagicMock(side_effect=route_task_side_effect)
-
-        result = self.collab_agent.run(task)
-
-        self.agent_a.run.assert_called_once_with(sub_task_a)
-        self.agent_b.run.assert_called_once_with(sub_task_b)
-        self.assertEqual(result, "Result from A\nResult from B")
-
-    def test_decomposition_first_and_only(self):
-        """Test decomposition splits only on the first ' and '."""
-        task = "part A and part B and part C"
-        sub_task_1 = "part A"
-        sub_task_2 = "part B and part C" # Second "and" is part of the sub-task
-
-        self.agent_a.run = MagicMock(return_value="Result from A for sub1")
-        self.agent_b.run = MagicMock(return_value="Result from B for sub2")
+        self.agent_a.run = MagicMock(return_value="Result A from sub1")
+        self.agent_b.run = MagicMock(return_value="Result B from sub2")
 
         def route_task_side_effect(t_task):
             if t_task == sub_task_1: return self.agent_a
@@ -244,15 +285,26 @@ class TestTaskDecomposition(unittest.TestCase):
 
         result = self.collab_agent.run(task)
 
+        self.llm_skill_mock.execute.assert_called_once()
+        # route_task is called for each sub-task
+        self.assertEqual(self.collab_agent.route_task.call_count, len(expected_sub_tasks))
+        self.collab_agent.route_task.assert_any_call(sub_task_1)
+        self.collab_agent.route_task.assert_any_call(sub_task_2)
+
         self.agent_a.run.assert_called_once_with(sub_task_1)
         self.agent_b.run.assert_called_once_with(sub_task_2)
-        self.assertEqual(result, "Result from A for sub1\nResult from B for sub2")
+        self.assertEqual(result, "Result A from sub1\nResult B from sub2")
 
-    def test_decomposition_sub_task_cannot_be_routed(self):
-        """Test decomposition where one sub-task cannot be routed."""
-        task = "do known part A and do unknown part X"
+    def test_llm_decomposition_sub_task_cannot_be_routed(self):
+        """Test LLM decomposition where one sub-task cannot be routed."""
+        task = "do known part A and do unknown part X with LLM"
         sub_task_known = "do known part A"
         sub_task_unknown = "do unknown part X"
+        expected_sub_tasks = [sub_task_known, sub_task_unknown]
+
+        self.llm_skill_mock.execute.return_value = json.dumps(expected_sub_tasks)
+        self.agent_a.run = MagicMock(return_value="Result A for known sub")
+
 
         def route_task_side_effect(t_task):
             if t_task == sub_task_known: return self.agent_a
@@ -262,18 +314,25 @@ class TestTaskDecomposition(unittest.TestCase):
 
         result = self.collab_agent.run(task)
 
+        self.llm_skill_mock.execute.assert_called_once()
         self.agent_a.run.assert_called_once_with(sub_task_known)
-        expected_result = f"Result from A\n[Sub-task '{sub_task_unknown}' could not be routed]"
-        self.assertEqual(result, expected_result)
+        # Check that agent_b (or any other for unknown part) was not called
+        self.agent_b.run.assert_not_called()
 
-    def test_decomposition_sub_task_agent_fails(self):
-        """Test decomposition where one sub-task's assigned agent fails."""
-        task = "part A good and part B bad"
+        expected_result_str = f"Result A for known sub\n[Sub-task '{sub_task_unknown}' could not be routed]"
+        self.assertEqual(result, expected_result_str)
+
+    def test_llm_decomposition_sub_task_agent_fails(self):
+        """Test LLM decomposition where one sub-task's assigned agent fails."""
+        task = "part A good and part B bad with LLM"
         sub_task_good = "part A good"
         sub_task_bad = "part B bad"
+        expected_sub_tasks = [sub_task_good, sub_task_bad]
 
-        self.agent_a.run = MagicMock(return_value="Result from A good")
-        self.agent_b.run = MagicMock(side_effect=Exception("Agent B internal error"))
+        self.llm_skill_mock.execute.return_value = json.dumps(expected_sub_tasks)
+
+        self.agent_a.run = MagicMock(return_value="Result from A good via LLM")
+        self.agent_b.run = MagicMock(side_effect=Exception("Agent B LLM sub-task error"))
 
         def route_task_side_effect(t_task):
             if t_task == sub_task_good: return self.agent_a
@@ -283,13 +342,13 @@ class TestTaskDecomposition(unittest.TestCase):
 
         result = self.collab_agent.run(task)
 
+        self.llm_skill_mock.execute.assert_called_once()
         self.agent_a.run.assert_called_once_with(sub_task_good)
         self.agent_b.run.assert_called_once_with(sub_task_bad)
 
-        # The error message format is: f"[{error_msg}]" where error_msg is f"Error executing sub-task '{sub_task_string}' by {routed_agent.name}: {e}"
-        expected_error_part = f"[Error executing sub-task '{sub_task_bad}' by AgentB: Agent B internal error]"
-        expected_result = f"Result from A good\n{expected_error_part}"
-        self.assertEqual(result, expected_result)
+        expected_error_part = f"[Error executing sub-task '{sub_task_bad}' by AgentB: Agent B LLM sub-task error]"
+        expected_result_str = f"Result from A good via LLM\n{expected_error_part}"
+        self.assertEqual(result, expected_result_str)
 
 
 if __name__ == "__main__":
