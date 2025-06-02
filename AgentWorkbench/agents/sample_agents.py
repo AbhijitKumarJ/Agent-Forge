@@ -1,5 +1,5 @@
 from agents import SimpleAgent, CollaborativeAgent
-from skills import EchoSkill, MathSkill, LLMCompletionSkill, WebSearchSkill, WikipediaSkill, TranslationSkill
+from skills import EchoSkill, MathSkill, LLMSkill, WebSearchSkill, WikipediaSkill, TranslationSkill
 from tools import PrintTool, ReverseTool, FileTool, SQLiteTool
 
 # 1. MathBot: solves math and prints results
@@ -33,7 +33,7 @@ def create_research_bot():
 # 5. LLMChatBot: uses LLM for completions
 def create_llm_chat_bot():
     agent = SimpleAgent(name="LLMChatBot", description="Chatbot powered by LLM.")
-    agent.add_skill(LLMCompletionSkill(name="LLMCompletionSkill", description="LLM completions."))
+    agent.add_skill(LLMSkill(name="LLMSkill", description="LLM completions."))
     agent.add_tool(PrintTool(name="PrintTool", description="Prints output."))
     return agent
 

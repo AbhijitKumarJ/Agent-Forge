@@ -2,7 +2,7 @@
 import argparse
 from config import LOG_LEVEL
 from agents import SimpleAgent, CollaborativeAgent
-from skills import EchoSkill, MathSkill, LLMCompletionSkill
+from skills import EchoSkill, MathSkill, LLMSkill
 from tools import PrintTool, ReverseTool
 
 
@@ -32,7 +32,7 @@ def main():
     elif args.llm:
         # LLM API demo (requires openai and API key)
         agent = SimpleAgent(name="LLMAgent", description="Agent with LLM skill.")
-        llm_skill = LLMCompletionSkill(name="LLMCompletionSkill", description="Calls OpenAI API.")
+        llm_skill = LLMSkill(name="LLMSkill", description="Calls OpenAI API.")
         agent.add_skill(llm_skill)
         agent.run(args.task)
         print("LLM API demo complete.")
